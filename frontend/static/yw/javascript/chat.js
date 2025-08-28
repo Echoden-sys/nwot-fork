@@ -57,9 +57,9 @@ if(Permissions.can_chat(state.userModel, state.worldModel)) {
 }
 
 if(state.userModel.is_staff) {
-	elm.chatbar.maxLength = 3030;
+	elm.chatbar.maxLength = 3030*2;
 } else {
-	elm.chatbar.maxLength = 400;
+	elm.chatbar.maxLength = 400*2; // Doubled for surrogates; an event listener will truncate it to 400 characters
 }
 
 var canChat = Permissions.can_chat(state.userModel, state.worldModel);
@@ -102,7 +102,7 @@ function api_chat_send(message, opts) {
 
 	message = message.trim();
 	if(!message.length) return;
-	message = message.slice(0, msgLim);
+	message = [...message].slice(0, msgLim).join("");
 	chatWriteHistory.push(message);
 	if(chatWriteHistory.length > chatWriteHistoryMax) {
 		chatWriteHistory.shift();
@@ -390,6 +390,12 @@ elm.chatbar.addEventListener("keydown", function(e) {
 		elm.chatbar.value = str;
 		e.preventDefault();
 		moveCaretEnd(elm.chatbar);
+	}
+
+	var msgLim = state.userModel.is_staff ? 3030 : 400;
+	
+	if([...elm.chatbar.value].length > msgLim) {
+		elm.chatbar.value = [...elm.chatbar.value].slice(0, msgLim).join("");
 	}
 });
 
