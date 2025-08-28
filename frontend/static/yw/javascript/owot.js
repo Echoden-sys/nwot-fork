@@ -333,6 +333,15 @@ function updateBgColorPicker() {
 	setRGBBgColorPicker(r, g, b);
 }
 
+function swapColors() {
+	var old_text_color = YourWorld.Color;
+	YourWorld.Color = Math.max(YourWorld.BgColor, 0);
+	YourWorld.BgColor = old_text_color;
+	updateColorPicker();
+	updateBgColorPicker();
+	w.ui.colorModal.close(true);
+}
+
 function updateCoordDisplay() {
 	var tileCoordX = -positionX / tileW;
 	var tileCoordY = -positionY / tileH;
@@ -401,6 +410,17 @@ function addColorShortcuts() {
 		var color = colors_highlight[i];
 		colorShortcutsBg.appendChild(createColorButton(color, true));
 	}
+
+	if(Permissions.can_color_cell(state.userModel, state.worldModel)) {
+		var swap = document.createElement("span");
+		swap.className = "color_btn";
+		swap.style.backgroundColor = "#FFFFFF";
+		swap.innerText = "↔";
+		swap.title = "Swap text and cell colors";
+		swap.onclick = swapColors;
+		colorShortcuts.appendChild(swap);
+	}
+	
 	var rand = document.createElement("span");
 	rand.className = "color_btn";
 	rand.style.backgroundColor = "#FFFFFF";
@@ -408,6 +428,14 @@ function addColorShortcuts() {
 	rand.title = "Random color";
 	rand.onclick = setColorPickerRandom;
 	colorShortcuts.appendChild(rand);
+
+	var swap2 = document.createElement("span");
+	swap2.className = "color_btn";
+	swap2.style.backgroundColor = "#FFFFFF";
+	swap2.innerText = "↔";
+	swap2.title = "Swap text and cell colors";
+	swap2.onclick = swapColors;
+	colorShortcuts.appendChild(swap2);
 
 	var bgNone = document.createElement("span");
 	bgNone.id = "color_btn_no_cell";
@@ -5176,6 +5204,7 @@ function buildMenu() {
 		return elm.coords.style.display = "none";
 	});
 	menuOptions.changeColor = menu.addOption("Change color", w.color);
+	menuOptions.changeTextDecos = menu.addOption("Change text decorations", toggleTextDecoBar);
 	menuOptions.goToCoords = menu.addOption("Go to coordinates", w.goToCoord);
 	menuOptions.coordLink = menu.addOption("Create link to coordinates", w.coordLink);
 	menuOptions.urlLink = menu.addOption("Create link to URL", w.urlLink);
