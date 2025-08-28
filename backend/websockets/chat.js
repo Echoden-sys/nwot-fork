@@ -44,7 +44,7 @@ function sanitizeCustomMeta(meta) {
 
 		var v = meta[k];
 		if(typeof v != "string" && typeof v != "number") continue;
-		if(v.length > 400) continue;
+		if([...v].length > 400) continue;
 
 		output[k] = v;
 	}
@@ -166,9 +166,9 @@ module.exports = async function(ws, data, send, broadcast, server, ctx) {
 		nick = data.nickname + "";
 	}
 	if(!user.staff) {
-		nick = nick.slice(0, 40);
+		nick = [...nick].slice(0, 40).join("");
 	} else {
-		nick = nick.slice(0, 3030);
+		nick = [...nick].slice(0, 3030).join("");
 	}
 
 	var msg = "";
@@ -188,10 +188,12 @@ module.exports = async function(ws, data, send, broadcast, server, ctx) {
 		data.color = "#000000";
 	}
 
-	if(!user.staff) {
-		msg = msg.slice(0, 400);
-	} else {
-		msg = msg.slice(0, 3030);
+	var max_message_length = 400;
+	if(user.staff) {
+		max_message_length = 3030;
+	}
+	function truncate_message(message) {
+		return [...message].slice(0, max_message_length).join("");
 	}
 
 	if(data.hasOwnProperty("customMeta")) {
@@ -474,6 +476,7 @@ module.exports = async function(ws, data, send, broadcast, server, ctx) {
 			}
 			id = san_nbr(id);
 
+			message = truncate_message(message);
 			var client = null;
 			var latestGlobalClientTime = -1;
 			wss.clients.forEach(function(ws) {
@@ -794,9 +797,11 @@ module.exports = async function(ws, data, send, broadcast, server, ctx) {
 				com.test();
 				break;
 			default:
-				serverChatResponse("Invalid command: " + msg);
+				serverChatResponse("Invalid command: " + truncate_message(msg));
 		}
 	}
+
+	msg = truncate_message(msg);
 
 	var chatData = {
 		nickname: nick,
