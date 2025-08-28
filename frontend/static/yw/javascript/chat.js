@@ -156,7 +156,7 @@ register_chat_command("nick", function (args) {
 		newDisplayName = "";
 	}
 	var nickLim = state.userModel.is_staff ? Infinity : 40;
-	newDisplayName = newDisplayName.slice(0, nickLim);
+	newDisplayName = [...newDisplayName].slice(0, nickLim).join("");
 	YourWorld.Nickname = newDisplayName;
 	storeNickname();
 	var nickChangeMsg;
