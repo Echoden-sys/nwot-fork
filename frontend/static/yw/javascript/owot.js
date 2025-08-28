@@ -335,8 +335,10 @@ function updateBgColorPicker() {
 
 function swapColors() {
 	var old_text_color = YourWorld.Color;
-	YourWorld.Color = Math.max(YourWorld.BgColor, 0);
-	YourWorld.BgColor = old_text_color;
+	var old_cell_color = Math.max(YourWorld.BgColor, 0);
+	w.changeColor(old_cell_color);
+	localStorage.setItem("color", old_cell_color);
+	w.changeBgColor(old_text_color);
 	updateColorPicker();
 	updateBgColorPicker();
 	w.ui.colorModal.close(true);
@@ -411,15 +413,15 @@ function addColorShortcuts() {
 		colorShortcutsBg.appendChild(createColorButton(color, true));
 	}
 
-	if(Permissions.can_color_cell(state.userModel, state.worldModel)) {
-		var swap = document.createElement("span");
-		swap.className = "color_btn";
-		swap.style.backgroundColor = "#FFFFFF";
-		swap.innerText = "↔";
-		swap.title = "Swap text and cell colors";
-		swap.onclick = swapColors;
-		colorShortcuts.appendChild(swap);
-	}
+	var swap = document.createElement("span");
+	swap.className = "color_btn";
+	swap.style.backgroundColor = "#FFFFFF";
+	swap.innerText = "↔";
+	swap.title = "Swap text and cell colors";
+	swap.onclick = swapColors;
+	swap.id = "swap_colors_btn";
+	colorShortcuts.appendChild(swap);
+	if(!Permissions.can_color_cell(state.userModel, state.worldModel)) swap.style.display = "none";
 	
 	var rand = document.createElement("span");
 	rand.className = "color_btn";
@@ -435,7 +437,7 @@ function addColorShortcuts() {
 	swap2.innerText = "↔";
 	swap2.title = "Swap text and cell colors";
 	swap2.onclick = swapColors;
-	colorShortcuts.appendChild(swap2);
+	colorShortcutsBg.appendChild(swap2);
 
 	var bgNone = document.createElement("span");
 	bgNone.id = "color_btn_no_cell";
@@ -7269,9 +7271,11 @@ function resetColorModalVisibility() {
 			buildBackgroundColorModal(w.ui.colorModal);
 		}
 		w.ui.colorModal.showTab("bg");
+		document.getElementById("swap_colors_btn").style.display = "inline-block";
 	} else {
 		w.ui.colorModal.hideTab("bg");
 		w.ui.colorModal.focusTab("fg");
+		document.getElementById("swap_colors_btn").style.display = "none";
 	}
 	if(pText) {
 		w.ui.colorModal.showTab("fg");
