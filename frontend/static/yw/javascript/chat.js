@@ -407,6 +407,13 @@ elm.chatbar.addEventListener("keydown", function(e) {
 	}
 });
 
+elm.chatbar.addEventListener("input", function() {
+	var msgLim = state.userModel.is_staff ? 3030 : 400;
+	if([...elm.chatbar.value].length > msgLim) {
+		elm.chatbar.value = [...elm.chatbar.value].slice(0, msgLim).join("");
+	}
+});
+
 function createEmoteImage(emoteName) {
   var position = emoteList[emoteName];
   var ePosX = position[0] / 2;
