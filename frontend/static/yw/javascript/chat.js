@@ -441,7 +441,7 @@ function autofillEmote(element) {
 	var val = elm.chatbar.value;
 	elm.chatbar.value = val.slice(0, chatEmoteData.textCursor - chatEmoteData.emoteLength)
 	+ element.getAttribute("data-content")
-	+ (val.length == chatEmoteData.textCursor ? " " : val.slice(chatEmoteData.textCursor, val.length));
+	+ val.slice(chatEmoteData.textCursor, val.length);
 	
 	hideEmoteList();
 }
@@ -466,7 +466,7 @@ elm.chatbar.addEventListener("selectionchange", function() {
 		return;
 	}
 	
-	var matches = [...this.value.slice(0, this.selectionStart).matchAll(/(^|[\s,.!*?]):[a-z0-9_]+$/giu)];
+	var matches = [...this.value.slice(0, this.selectionStart).matchAll(/:[a-z0-9_]+$/giu)];
 	if(matches.length == 0) {
 		hideEmoteList();
 		return;
