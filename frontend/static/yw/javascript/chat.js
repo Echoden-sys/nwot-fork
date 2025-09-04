@@ -22,6 +22,7 @@ var chatGlobalUnreadBar  = null;
 var chatGreentext        = true;
 var chatEmotes           = true;
 var acceptChatDeletions  = true;
+var chatEmoteData        = null;
 var client_commands      = {}; // deprecated
 
 if(isNaN(defaultChatColor)) {
@@ -45,7 +46,8 @@ defineElements({ // elm[<name>]
 	total_unread: byId("total_unread"),
 	page_unread: byId("page_unread"),
 	global_unread: byId("global_unread"),
-	chat_upper: byId("chat_upper")
+	chat_upper: byId("chat_upper"),
+	chat_emote_list: byId("chat_emote_list")
 });
 
 if(Permissions.can_chat(state.userModel, state.worldModel)) {
@@ -323,12 +325,6 @@ elm.chatsend.addEventListener("click", function() {
 	sendChat();
 });
 
-elm.chatbar.addEventListener("keypress", function(e) {
-	if(e.key == "Enter" || e.keyCode == 13) { // Enter
-		sendChat();
-	}
-});
-
 function moveCaretEnd(elm) {
 	if(elm.selectionStart != void 0) {
 		elm.selectionStart = elm.value.length;
@@ -351,52 +347,143 @@ function setChatTabPadding(elm) {
 elm.chatbar.addEventListener("keydown", function(e) {
 	var keyCode = e.keyCode;
 	// scroll through chat history that the client sent
-	if(keyCode == 38) { // up
-		// history modified
-		if(chatWriteHistoryIdx > -1 && elm.chatbar.value != chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1]) {
-			chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1] = elm.chatbar.value;
-		}
-		if(chatWriteHistoryIdx == -1 && elm.chatbar.value) {
-			chatWriteTmpBuffer = elm.chatbar.value;
-		}
-		chatWriteHistoryIdx++;
-		if(chatWriteHistoryIdx >= chatWriteHistory.length) chatWriteHistoryIdx = chatWriteHistory.length - 1;
-		var upVal = chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1];
-		if(!upVal) return;
-		elm.chatbar.value = upVal;
-		// pressing up will move the cursor all the way to the left by default
-		e.preventDefault();
-		moveCaretEnd(elm.chatbar);
-	} else if(keyCode == 40) { // down
-		// history modified
-		if(chatWriteHistoryIdx > -1 && elm.chatbar.value != chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1]) {
-			chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1] = elm.chatbar.value;
-		}
-		chatWriteHistoryIdx--;
-		if(chatWriteHistoryIdx < -1) {
-			chatWriteHistoryIdx = -1;
-			return;
-		}
-		var str = "";
-		if(chatWriteHistoryIdx != -1) {
-			str = chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1];
-		} else {
-			if(chatWriteTmpBuffer) {
-				str = chatWriteTmpBuffer;
-				e.preventDefault();
-				moveCaretEnd(elm.chatbar);
+	if(chatEmoteData == null) {
+		if(keyCode == 38) { // up
+			// history modified
+			if(chatWriteHistoryIdx > -1 && elm.chatbar.value != chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1]) {
+				chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1] = elm.chatbar.value;
 			}
+			if(chatWriteHistoryIdx == -1 && elm.chatbar.value) {
+				chatWriteTmpBuffer = elm.chatbar.value;
+			}
+			chatWriteHistoryIdx++;
+			if(chatWriteHistoryIdx >= chatWriteHistory.length) chatWriteHistoryIdx = chatWriteHistory.length - 1;
+			var upVal = chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1];
+			if(!upVal) return;
+			elm.chatbar.value = upVal;
+			// pressing up will move the cursor all the way to the left by default
+			e.preventDefault();
+			moveCaretEnd(elm.chatbar);
+		} else if(keyCode == 40) { // down
+			// history modified
+			if(chatWriteHistoryIdx > -1 && elm.chatbar.value != chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1]) {
+				chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1] = elm.chatbar.value;
+			}
+			chatWriteHistoryIdx--;
+			if(chatWriteHistoryIdx < -1) {
+				chatWriteHistoryIdx = -1;
+				return;
+			}
+			var str = "";
+			if(chatWriteHistoryIdx != -1) {
+				str = chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1];
+			} else {
+				if(chatWriteTmpBuffer) {
+					str = chatWriteTmpBuffer;
+					e.preventDefault();
+					moveCaretEnd(elm.chatbar);
+				}
+			}
+			elm.chatbar.value = str;
+			e.preventDefault();
+			moveCaretEnd(elm.chatbar);
+		} else if(e.key == "Enter" || keyCode == 13) { // Enter
+			sendChat();
 		}
-		elm.chatbar.value = str;
-		e.preventDefault();
-		moveCaretEnd(elm.chatbar);
+	} else {
+		if(keyCode == 38 || keyCode == 40) { // Up & Down 
+			elm.chat_emote_list.querySelectorAll(".option")[chatEmoteData.cursorIndex].classList.remove("selected");
+			chatEmoteData.cursorIndex = chatEmoteData.cursorIndex + (keyCode == 38 ? -1 : 1);
+			if(keyCode == 38 && chatEmoteData.cursorIndex < 0) chatEmoteData.cursorIndex = chatEmoteData.resultLength - 1;
+			if(keyCode == 40 && chatEmoteData.cursorIndex > chatEmoteData.resultLength - 1) chatEmoteData.cursorIndex = 0;
+			elm.chat_emote_list.querySelectorAll(".option")[chatEmoteData.cursorIndex].classList.add("selected");
+			e.preventDefault();
+		} else if((keyCode == 9 || keyCode == 13) && !e.shiftKey) { // Tab & Enter
+			autofillEmote(elm.chat_emote_list.querySelectorAll(".option")[chatEmoteData.cursorIndex]);
+			e.preventDefault();
+		} else if(keyCode == 27) { // Escape
+			hideEmoteList();
+		}
+	}
+});
+
+function createEmoteImage(emoteName) {
+  var position = emoteList[emoteName];
+  var ePosX = position[0] / 2;
+  var ePosY = position[1] / 2;
+  var eWidth = (position[2] ?? 32) / 2;
+  return "<div title=':" + emoteName
+    + ":' class='chat_emote' style='background-position-x:-" + ePosX
+    + "px;background-position-y:-" + ePosY
+    + "px;width:" + eWidth + "px'></div>";
+}
+
+function showEmoteList() {
+	elm.chat_emote_list.style.display = "block";
+	elm.chat_emote_list.style.bottom = (elm.chatbar.offsetHeight + 2) + "px";
+	elm.chat_emote_list.style.right = (elm.chat_upper.offsetWidth - 1 - elm.chatbar.offsetWidth) + "px";
+}
+
+function hideEmoteList() {
+	if(chatEmoteData == null) return;
+	elm.chat_emote_list.style.display = "none";
+	chatEmoteData = null;
+}
+
+function autofillEmote(element) {
+	var val = elm.chatbar.value;
+	elm.chatbar.value = val.slice(0, chatEmoteData.textCursor - chatEmoteData.emoteLength)
+	+ element.getAttribute("data-content")
+	+ (val.length == chatEmoteData.textCursor ? " " : val.slice(chatEmoteData.textCursor, val.length));
+	
+	hideEmoteList();
+}
+
+function addEmoteAutosuggestOption(emote, highlight) {
+	chatEmoteData.resultLength++;
+	var option = document.createElement("div");
+	option.classList.add("option");
+	option.innerHTML = createEmoteImage(emote) + " :<b>" + html_tag_esc(emote.slice(0, highlight)) + "</b>" + emote.slice(highlight, emote.length) + ":";
+	option.setAttribute("data-content", ":" + emote + ":");
+	option.addEventListener("click", function() {
+		autofillEmote(this);
+		elm.chatbar.focus();
+	});
+	if(chatEmoteData.resultLength == 1) option.classList.add("selected");
+	elm.chat_emote_list.appendChild(option);
+}
+
+elm.chatbar.addEventListener("selectionchange", function() {
+	if(this.selectionStart != this.selectionEnd) {
+		hideEmoteList();
+		return;
+	}
+	
+	var matches = [...this.value.slice(0, this.selectionStart).matchAll(/(^|[\s,.!*?]):[a-z0-9_]+$/giu)];
+	if(matches.length == 0) {
+		hideEmoteList();
+		return;
 	}
 
-	var msgLim = state.userModel.is_staff ? 3030 : 400;
+	chatEmoteData = { resultLength: 0, cursorIndex: 0, textCursor: 0, emoteLength: 0 };
 	
-	if([...elm.chatbar.value].length > msgLim) {
-		elm.chatbar.value = [...elm.chatbar.value].slice(0, msgLim).join("");
+	var currentEmote = matches[matches.length-1][0].trim().toLowerCase();
+	currentEmote = currentEmote.slice(1, currentEmote.length);
+	chatEmoteData.textCursor = this.selectionStart
+	chatEmoteData.emoteLength = currentEmote.length + 1;
+	var emoteArr = Object.keys(emoteList);
+
+	elm.chat_emote_list.innerHTML = "";
+	var foundEmotes = false;
+	for(var i = 0; emoteArr.length > i; i++) {
+		if(emoteArr[i].toLowerCase().startsWith(currentEmote)) {
+			addEmoteAutosuggestOption(emoteArr[i], currentEmote.length)
+			foundEmotes = true;
+	    }
 	}
+
+	if(!foundEmotes) hideEmoteList();
+	else showEmoteList();
 });
 
 elm.chat_close.addEventListener("click", function() {
@@ -928,14 +1015,7 @@ function buildChatElement(field, id, type, nickname, message, realUsername, op, 
 				if(emoteMode) {
 					var emoteName = emoteBuffer.slice(1, -1);
 					if(emoteList.hasOwnProperty(emoteName)) {
-						var position = emoteList[emoteName];
-						var ePosX = position[0] / 2;
-						var ePosY = position[1] / 2;
-						var eWidth = (position[2] ?? 32) / 2;
-						emoteMessage += "<div title=':" + emoteName
-							+ ":' class='chat_emote' style='background-position-x:-" + ePosX
-							+ "px;background-position-y:-" + ePosY
-							+ "px;width:" + eWidth + "px'></div>";
+						emoteMessage += createEmoteImage(emoteName);
 					} else {
 						emoteMessage += emoteBuffer;
 					}
