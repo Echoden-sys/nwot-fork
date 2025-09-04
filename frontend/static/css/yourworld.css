@@ -603,3 +603,23 @@ a:visited {
 .longpress-option:active {
 	background-color: #CDCDFF;
 }
+.dropdown {
+    position: absolute;
+    border: 1px solid #6c6c6c;
+    border-radius: 2px;
+    background: #dadada;
+    font-size: 13px;
+    font-family: monospace;
+    left: 3px;
+	display: none;
+}
+.dropdown .option {
+    padding: 2px;
+    cursor: pointer;
+}
+.dropdown .option:nth-child(odd) {
+    background: #c3c3c3;
+}
+.dropdown .option:hover, .dropdown .option.selected {
+    background: #f2f2f2;
+}
