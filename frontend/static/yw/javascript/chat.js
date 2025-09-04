@@ -973,6 +973,8 @@ function buildChatElement(field, id, type, nickname, message, realUsername, op, 
 	}
 
 	var chatGroup = document.createElement("div");
+	chatGroup.setAttribute("data-id", id);
+	chatGroup.setAttribute("data-date", date);
 	if(!pm && hasTagDom) chatGroup.appendChild(tagDom);
 	if(pmDom) {
 		if(pm == "to_me") {
