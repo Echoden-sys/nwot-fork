@@ -613,6 +613,8 @@ a:visited {
     left: 3px;
 	display: none;
 	box-sizing: border-box;
+	overflow-y: auto;
+	overflow-x: hodden;
 }
 .dropdown .option {
     padding: 2px;
