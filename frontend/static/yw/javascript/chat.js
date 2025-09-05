@@ -23,7 +23,38 @@ var chatGreentext        = true;
 var chatEmotes           = true;
 var acceptChatDeletions  = true;
 var chatEmoteData        = null;
+var chatAutocmpMode      = 0;
+var chatAutocmpIndex     = null;
+var chatAutocmpCount     = null;
+var chatAutocmpCursor    = null;
+var chatAutocmpOffset    = null;
 var client_commands      = {}; // deprecated
+var server_commands = [ // taken from /backend/websockets/chat.js
+	// operator
+	[3, "uptime", null, "get uptime of server", null],
+
+	// superuser
+	[2, "worlds", null, "list all worlds", null],
+
+	// staff
+	[1, "channel", null, "get info about a chat channel"],
+
+	// general
+	[0, "help", null, "list all commands", null],
+	
+	[0, "block", ["id"], "block someone by id", "1220"],
+	[0, "blockuser", ["username"], "block someone by username", "JohnDoe"],
+	[0, "unblock", ["id"], "unblock someone by id", "1220"],
+	[0, "unblockuser", ["username"], "unblock someone by username", "JohnDoe"],
+	[0, "unblockall", null, "unblock all users", null],
+	[0, "mute", ["id", "seconds", "[h/d/w/m/y]"], "mute a user completely", "1220 9999"], // check for permission
+	[0, "clearmutes", null, "unmute all clients"], // check for permission
+	[0, "delete", ["id", "timestamp"], "delete a chat message", "1220 1693147307895"], // check for permission
+	[0, "tell", ["id", "message"], "tell someone a secret message", "1220 The coordinates are (392, 392)"],
+	[0, "whoami", null, "display your identity"],
+	[0, "test", null, "preview your appearance"]
+];
+
 
 if(isNaN(defaultChatColor)) {
 	defaultChatColor = null;
@@ -47,7 +78,7 @@ defineElements({ // elm[<name>]
 	page_unread: byId("page_unread"),
 	global_unread: byId("global_unread"),
 	chat_upper: byId("chat_upper"),
-	chat_emote_list: byId("chat_emote_list")
+	chat_autocomplete_list: byId("chat_autocomplete_list")
 });
 
 if(Permissions.can_chat(state.userModel, state.worldModel)) {
@@ -347,63 +378,60 @@ function setChatTabPadding(elm) {
 elm.chatbar.addEventListener("keydown", function(e) {
 	var keyCode = e.keyCode;
 	// scroll through chat history that the client sent
-	if(chatEmoteData == null) {
-		if(keyCode == 38) { // up
-			// history modified
-			if(chatWriteHistoryIdx > -1 && elm.chatbar.value != chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1]) {
-				chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1] = elm.chatbar.value;
-			}
-			if(chatWriteHistoryIdx == -1 && elm.chatbar.value) {
-				chatWriteTmpBuffer = elm.chatbar.value;
-			}
-			chatWriteHistoryIdx++;
-			if(chatWriteHistoryIdx >= chatWriteHistory.length) chatWriteHistoryIdx = chatWriteHistory.length - 1;
-			var upVal = chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1];
-			if(!upVal) return;
-			elm.chatbar.value = upVal;
-			// pressing up will move the cursor all the way to the left by default
-			e.preventDefault();
-			moveCaretEnd(elm.chatbar);
-		} else if(keyCode == 40) { // down
-			// history modified
-			if(chatWriteHistoryIdx > -1 && elm.chatbar.value != chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1]) {
-				chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1] = elm.chatbar.value;
-			}
-			chatWriteHistoryIdx--;
-			if(chatWriteHistoryIdx < -1) {
-				chatWriteHistoryIdx = -1;
-				return;
-			}
-			var str = "";
-			if(chatWriteHistoryIdx != -1) {
-				str = chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1];
-			} else {
-				if(chatWriteTmpBuffer) {
-					str = chatWriteTmpBuffer;
-					e.preventDefault();
-					moveCaretEnd(elm.chatbar);
-				}
-			}
-			elm.chatbar.value = str;
-			e.preventDefault();
-			moveCaretEnd(elm.chatbar);
-		} else if(e.key == "Enter" || keyCode == 13) { // Enter
-			sendChat();
+	if(keyCode == 38 && chatAutocmpMode != 1) { // up
+		// history modified
+		if(chatWriteHistoryIdx > -1 && elm.chatbar.value != chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1]) {
+			chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1] = elm.chatbar.value;
 		}
-	} else {
-		if(keyCode == 38 || keyCode == 40) { // Up & Down 
-			elm.chat_emote_list.querySelectorAll(".option")[chatEmoteData.cursorIndex].classList.remove("selected");
-			chatEmoteData.cursorIndex = chatEmoteData.cursorIndex + (keyCode == 38 ? -1 : 1);
-			if(keyCode == 38 && chatEmoteData.cursorIndex < 0) chatEmoteData.cursorIndex = chatEmoteData.resultLength - 1;
-			if(keyCode == 40 && chatEmoteData.cursorIndex > chatEmoteData.resultLength - 1) chatEmoteData.cursorIndex = 0;
-			elm.chat_emote_list.querySelectorAll(".option")[chatEmoteData.cursorIndex].classList.add("selected");
-			e.preventDefault();
-		} else if((keyCode == 9 || keyCode == 13) && !e.shiftKey) { // Tab & Enter
-			autofillEmote(elm.chat_emote_list.querySelectorAll(".option")[chatEmoteData.cursorIndex]);
-			e.preventDefault();
-		} else if(keyCode == 27) { // Escape
-			hideEmoteList();
+		if(chatWriteHistoryIdx == -1 && elm.chatbar.value) {
+			chatWriteTmpBuffer = elm.chatbar.value;
 		}
+		chatWriteHistoryIdx++;
+		if(chatWriteHistoryIdx >= chatWriteHistory.length) chatWriteHistoryIdx = chatWriteHistory.length - 1;
+		var upVal = chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1];
+		if(!upVal) return;
+		elm.chatbar.value = upVal;
+		// pressing up will move the cursor all the way to the left by default
+		e.preventDefault();
+		moveCaretEnd(elm.chatbar);
+	} else if(keyCode == 40 && chatAutocmpMode != 1) { // down
+		// history modified
+		if(chatWriteHistoryIdx > -1 && elm.chatbar.value != chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1]) {
+			chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1] = elm.chatbar.value;
+		}
+		chatWriteHistoryIdx--;
+		if(chatWriteHistoryIdx < -1) {
+			chatWriteHistoryIdx = -1;
+			return;
+		}
+		var str = "";
+		if(chatWriteHistoryIdx != -1) {
+			str = chatWriteHistory[chatWriteHistory.length - chatWriteHistoryIdx - 1];
+		} else {
+			if(chatWriteTmpBuffer) {
+				str = chatWriteTmpBuffer;
+				e.preventDefault();
+				moveCaretEnd(elm.chatbar);
+			}
+		}
+		elm.chatbar.value = str;
+		e.preventDefault();
+		moveCaretEnd(elm.chatbar);
+	} else if((e.key == "Enter" || keyCode == 13) && (chatAutocmpMode != 1 || e.shiftKey)) { // Enter
+		sendChat();
+		if(chatAutocmpMode != 0) hideAutocomplete();
+	} else if((keyCode == 38 || keyCode == 40) && chatAutocmpMode == 1) { // Up & Down 
+		elm.chat_autocomplete_list.querySelectorAll(".option")[chatAutocmpIndex].classList.remove("selected");
+		chatAutocmpIndex = chatAutocmpIndex + (keyCode == 38 ? -1 : 1);
+		if(keyCode == 38 && chatAutocmpIndex < 0) chatAutocmpIndex = chatAutocmpCount - 1;
+		if(keyCode == 40 && chatAutocmpIndex > chatAutocmpCount - 1) chatAutocmpIndex = 0;
+		elm.chat_autocomplete_list.querySelectorAll(".option")[chatAutocmpIndex].classList.add("selected");
+		e.preventDefault();
+	} else if((keyCode == 9 || keyCode == 13) && chatAutocmpMode == 1) { // Tab & Enter
+		autofillResult(elm.chat_autocomplete_list.querySelectorAll(".option")[chatAutocmpIndex]);
+		e.preventDefault();
+	} else if((keyCode == 9 && chatAutocmpMode == 2) || (keyCode == 27 && chatAutocmpMode != 0)) { // Tab or Escape
+		hideAutocomplete();
 	}
 });
 
@@ -425,72 +453,177 @@ function createEmoteImage(emoteName) {
     + "px;width:" + eWidth + "px'></div>";
 }
 
-function showEmoteList() {
-	elm.chat_emote_list.style.display = "block";
-	elm.chat_emote_list.style.bottom = (elm.chatbar.offsetHeight + 2) + "px";
-	elm.chat_emote_list.style.right = (elm.chat_upper.offsetWidth - 1 - elm.chatbar.offsetWidth) + "px";
+function makeCommandList() {
+	var commandList = {};
+	for(var i in chatCommandRegistry) {
+		commandList[i] = {
+			description: chatCommandRegistry[i].desc,
+			parameters: chatCommandRegistry[i].params,
+			example: chatCommandRegistry[i].example,
+		}
+	}
+
+	for(var i in server_commands) {
+		if(server_commands[i][0] == 3 && !state.userModel.is_operator) continue;
+		if(server_commands[i][0] == 2 && !state.userModel.is_superuser) continue;
+		if(server_commands[i][0] == 1 && !state.userModel.is_staff) continue;
+		if((server_commands[i][1] == "mute" || server_commands[i][1] == "clearmutes" || server_commands[i][1] == "delete") && !state.userModel.is_staff && !(state.userModel.is_owner && selectedChatTab == 0)) continue;
+
+		commandList[server_commands[i][1]] = {
+			description: server_commands[i][3],
+			parameters: server_commands[i][2],
+			example: server_commands[i][4],
+		}
+	}
+
+	return commandList;
 }
 
-function hideEmoteList() {
-	if(chatEmoteData == null) return;
-	elm.chat_emote_list.style.display = "none";
-	chatEmoteData = null;
+function showAutocomplete(mode) {
+	chatAutocmpMode = mode;
+	elm.chat_autocomplete_list.style.display = "block";
+	elm.chat_autocomplete_list.style.bottom = (elm.chatbar.offsetHeight + 2) + "px";
+	elm.chat_autocomplete_list.style.right = (elm.chat_upper.offsetWidth - 3 - elm.chatbar.offsetWidth) + "px";
+	elm.chat_autocomplete_list.style.maxHeight = "calc((100% - " + (elm.chat_upper.offsetHeight + elm.chatbar.offsetHeight + 5) + "px) * 0.667)";
 }
 
-function autofillEmote(element) {
+function hideAutocomplete() {
+	if(chatAutocmpMode == 0) return;
+	elm.chat_autocomplete_list.style.display = "none";
+	chatAutocmpMode = 0;
+	chatAutocmpIndex = null;
+	chatAutocmpCount = null;
+	chatAutocmpCursor = null;
+	chatAutocmpOffset = null;
+}
+
+function autofillResult(element) {
 	var val = elm.chatbar.value;
-	elm.chatbar.value = val.slice(0, chatEmoteData.textCursor - chatEmoteData.emoteLength)
-	+ element.getAttribute("data-content")
-	+ val.slice(chatEmoteData.textCursor, val.length);
-	
-	hideEmoteList();
+	var att = element.getAttribute("data-content");
+	if(att.startsWith("/") && att.endsWith(" ")) {
+		var commandList = makeCommandList();
+		if(commandList[att.slice(1, att.length-1)] && commandList[att.slice(1, att.length-1)].parameters == null) {
+			sendChat();
+			hideAutocomplete();
+			return;
+		}
+	}
+	elm.chatbar.value = val.slice(0, chatAutocmpCursor - chatAutocmpOffset) + att + val.slice(chatAutocmpCursor, val.length);
+	hideAutocomplete();
 }
 
 function addEmoteAutosuggestOption(emote, highlight) {
-	chatEmoteData.resultLength++;
+	if(chatAutocmpCount == null) chatAutocmpCount = 0;
+	chatAutocmpCount++;
 	var option = document.createElement("div");
 	option.classList.add("option");
-	option.innerHTML = createEmoteImage(emote) + " :<b>" + html_tag_esc(emote.slice(0, highlight)) + "</b>" + emote.slice(highlight, emote.length) + ":";
+	option.innerHTML = createEmoteImage(emote) + " :<b>" + html_tag_esc(emote.slice(0, highlight)) + "</b>" + html_tag_esc(emote.slice(highlight, emote.length)) + ":";
 	option.setAttribute("data-content", ":" + emote + ":");
 	option.addEventListener("click", function() {
-		autofillEmote(this);
+		autofillResult(this);
 		elm.chatbar.focus();
 	});
-	if(chatEmoteData.resultLength == 1) option.classList.add("selected");
-	elm.chat_emote_list.appendChild(option);
+	if(chatAutocmpCount == 1) option.classList.add("selected");
+	elm.chat_autocomplete_list.appendChild(option);
+}
+
+function addCommandAutosuggestOption(name, parameters, description, highlight, paramIndex) {
+	if(chatAutocmpCount == null) chatAutocmpCount = 0;
+	chatAutocmpCount++;
+	var option = document.createElement("div");
+	option.classList.add("option");
+	if(highlight != null && paramIndex == null) {
+		option.innerHTML = "<span style=\"color: #00006f;\">/<b>" + html_tag_esc(name.slice(0, highlight)) + "</b>" + html_tag_esc(name.slice(highlight, name.length))
+        + "</span>" + (parameters != null ? " <span style=\"font-style: italic;\">&lt;" + html_tag_esc(parameters.join(", ")) + "&gt;</span>" : "")
+        + "<span> :: " + html_tag_esc(description) + "</span>";
+		option.setAttribute("data-content", "/" + name + " ");
+		option.addEventListener("click", function() {
+			autofillResult(this);
+			elm.chatbar.focus();
+		});
+		if(chatAutocmpCount == 1) option.classList.add("selected");
+	} else if(highlight == null && paramIndex != null) {
+		var paramString = "";
+		for(var i in parameters) {
+			paramString += (i == paramIndex ? "<b>" : "") + html_tag_esc(parameters[i]) + (i == paramIndex ? "</b>" : "") + (i != parameters.length-1 ? ", " : "");
+		}
+		option.innerHTML = "<span style=\"color: #00006f;\">/" + html_tag_esc(name) + "</span>" + (parameters != null ? " <span style=\"font-style: italic;\">&lt;" + paramString + "&gt;</span>" : "")
+        + "<span> :: " + html_tag_esc(description) + "</span>";
+	}
+	elm.chat_autocomplete_list.appendChild(option);
 }
 
 elm.chatbar.addEventListener("selectionchange", function() {
 	if(this.selectionStart != this.selectionEnd) {
-		hideEmoteList();
-		return;
-	}
-	
-	var matches = [...this.value.slice(0, this.selectionStart).matchAll(/:[a-z0-9_]+$/giu)];
-	if(matches.length == 0) {
-		hideEmoteList();
+		hideAutocomplete();
 		return;
 	}
 
-	chatEmoteData = { resultLength: 0, cursorIndex: 0, textCursor: 0, emoteLength: 0 };
+	if(this.value.startsWith("/")) {
+		var currentCommand = this.value.slice(1, this.value.length).toLowerCase().split(" ")[0];
+		var commandList = makeCommandList();
+
+		if(this.value.split(" ").length == 1) {
+			chatAutocmpCursor = this.selectionStart;
+			chatAutocmpOffset = currentCommand.length + 1;
+			chatAutocmpIndex = 0;
+			chatAutocmpCount = 0;
+			var commandArr = Object.keys(commandList).sort();
+		
+			elm.chat_autocomplete_list.innerHTML = "";
+			var foundCommands = false;
+			for(var i in commandArr) {
+				if(commandArr[i].toLowerCase().startsWith(currentCommand)) {
+					addCommandAutosuggestOption(commandArr[i], commandList[commandArr[i]].parameters, commandList[commandArr[i]].description, currentCommand.length, null)
+					foundCommands = true;
+			    }
+			}
+		
+			if(!foundCommands) {
+				hideAutocomplete();
+			} else {
+				showAutocomplete(1);
+				return;
+			}
+		} else {
+			if(Object.keys(commandList).includes(currentCommand) && commandList[currentCommand].parameters && commandList[currentCommand].parameters.length >= this.value.split(" ").length-1) {
+				elm.chat_autocomplete_list.innerHTML = "";
+				addCommandAutosuggestOption(currentCommand, commandList[currentCommand].parameters, commandList[currentCommand].description, null, this.value.split(" ").length-2);
+				showAutocomplete(2);
+				return;
+			} else {
+				hideAutocomplete();
+			}
+		}
+	}
+
+	var matches = [...this.value.slice(0, this.selectionStart).matchAll(/(?<!:[a-z0-9_]+):[a-z0-9_]*$/giu)];
+	if(matches.length == 0) {
+		hideAutocomplete();
+		return;
+	}
 	
 	var currentEmote = matches[matches.length-1][0].trim().toLowerCase();
 	currentEmote = currentEmote.slice(1, currentEmote.length);
-	chatEmoteData.textCursor = this.selectionStart
-	chatEmoteData.emoteLength = currentEmote.length + 1;
-	var emoteArr = Object.keys(emoteList);
+	chatAutocmpCursor = this.selectionStart;
+	chatAutocmpOffset = currentEmote.length + 1;
+	chatAutocmpIndex = 0;
+	var emoteArr = Object.keys(emoteList).sort();
 
-	elm.chat_emote_list.innerHTML = "";
+	elm.chat_autocomplete_list.innerHTML = "";
 	var foundEmotes = false;
 	for(var i = 0; emoteArr.length > i; i++) {
 		if(emoteArr[i].toLowerCase().startsWith(currentEmote)) {
 			addEmoteAutosuggestOption(emoteArr[i], currentEmote.length)
 			foundEmotes = true;
-	    }
+		}
 	}
 
-	if(!foundEmotes) hideEmoteList();
-	else showEmoteList();
+	if(!foundEmotes) {
+		hideAutocomplete();
+		return;
+	}
+	showAutocomplete(1);
 });
 
 elm.chat_close.addEventListener("click", function() {
@@ -608,9 +741,10 @@ function resizable_chat() {
 			chatResizing = true;
 		}
 	});
-	document.addEventListener("mouseup", function() {
+	document.addEventListener("mouseup", function(e) {
 		isDown = false;
 		chatResizing = false;
+		if(!closest(e.target, elm.chat_autocomplete_list)) hideAutocomplete();
 	});
 	document.addEventListener("mousemove", function(e) {
 		if(!isDown) return;
