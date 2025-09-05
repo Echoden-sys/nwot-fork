@@ -612,6 +612,7 @@ a:visited {
     font-family: monospace;
     left: 3px;
 	display: none;
+	box-sizing: border-box;
 }
 .dropdown .option {
     padding: 2px;
