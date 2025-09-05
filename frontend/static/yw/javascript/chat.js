@@ -428,7 +428,7 @@ elm.chatbar.addEventListener("keydown", function(e) {
 		elm.chat_autocomplete_list.querySelectorAll(".option")[chatAutocmpIndex].classList.add("selected");
 		e.preventDefault();
 	} else if((keyCode == 9 || keyCode == 13) && chatAutocmpMode == 1) { // Tab & Enter
-		autofillResult(elm.chat_autocomplete_list.querySelectorAll(".option")[chatAutocmpIndex]);
+		autofillResult(elm.chat_autocomplete_list.querySelectorAll(".option")[chatAutocmpIndex], keyCode == 13);
 		e.preventDefault();
 	} else if((keyCode == 9 && chatAutocmpMode == 2) || (keyCode == 27 && chatAutocmpMode != 0)) { // Tab or Escape
 		hideAutocomplete();
@@ -497,10 +497,10 @@ function hideAutocomplete() {
 	chatAutocmpOffset = null;
 }
 
-function autofillResult(element) {
+function autofillResult(element, autosend) {
 	var val = elm.chatbar.value;
 	var att = element.getAttribute("data-content");
-	if(att.startsWith("/") && att.endsWith(" ")) {
+	if(att.startsWith("/") && att.endsWith(" ") && autosend) {
 		var commandList = makeCommandList();
 		if(commandList[att.slice(1, att.length-1)] && commandList[att.slice(1, att.length-1)].parameters == null) {
 			sendChat();
