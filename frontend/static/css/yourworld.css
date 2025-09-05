@@ -614,7 +614,7 @@ a:visited {
 	display: none;
 	box-sizing: border-box;
 	overflow-y: auto;
-	overflow-x: hodden;
+	overflow-x: hidden;
 }
 .dropdown .option {
     padding: 2px;
