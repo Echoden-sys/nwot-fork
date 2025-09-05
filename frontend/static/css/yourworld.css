@@ -620,7 +620,7 @@ a:visited {
     padding: 2px;
     cursor: pointer;
 }
-.dropdown .option:nth-child(odd) {
+.dropdown .option:nth-child(even) {
     background: #c3c3c3;
 }
 .dropdown .option:hover, .dropdown .option.selected {
