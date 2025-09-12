@@ -1980,6 +1980,7 @@ function renderCursor(coords) {
 	var newTileY = coords[1];
 	var tile = Tile.get(newTileX, newTileY);
 	if(!tile) return false;
+	if(window.dcm) return false; // TEMP
 	var writability = tile.properties.writability;
 	var thisTile = {
 		writability: writability,
