@@ -786,6 +786,13 @@ if(!HTMLElement.prototype.append) {
 	}
 }
 
+// Checks if the window's visual viewport is fully zoomed out. See https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport
+function viewportSufficient() {
+	if(!window.visualViewport) return true; // Unsupported, assume true
+	var viewport = window.visualViewport;
+	return viewport.offsetTop == 0 && viewport.offsetLeft == 0 && (viewport.scale == 0 || viewport.scale == 1);
+}
+
 var w = {
 	loadScript: function(url, callback) {
 		var script = document.createElement("script");
